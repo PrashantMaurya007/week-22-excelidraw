@@ -1,10 +1,19 @@
 import { initDraw } from "@/draw";
 import { useEffect, useRef, useState } from "react";
 import { IconButton } from "./IconButton";
-import { Circle, Pencil, RectangleHorizontalIcon } from "lucide-react";
+import { Circle, Pencil, RectangleHorizontalIcon, Eraser, Highlighter, Undo, Redo, Download } from "lucide-react";
 import { Game } from "@/draw/Game";
 
-export type Tool = "circle" | "rect" | "pencil";
+export type Tool = "circle" | "rect" | "pencil" | "marker" | "eraser";
+
+const COLORS = [
+    { name: "White", value: "rgba(255, 255, 255, 1)" },
+    { name: "Red", value: "rgba(255, 0, 0, 1)" },
+    { name: "Blue", value: "rgba(0, 0, 255, 1)" },
+    { name: "Green", value: "rgba(0, 255, 0, 1)" },
+    { name: "Yellow", value: "rgba(255, 255, 0, 1)" },
+    { name: "Cyan", value: "rgba(0, 255, 255, 1)" },
+];
 
 export function Canvas({
     roomId,
@@ -15,11 +24,14 @@ export function Canvas({
 }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [game, setGame] = useState<Game>();
-    const [selectedTool, setSelectedTool] = useState<Tool>("circle")
+    const [selectedTool, setSelectedTool] = useState<Tool>("pencil");
+    const [selectedColor, setSelectedColor] = useState(COLORS[0].value);
 
     useEffect(() => {
-        game?.setTool(selectedTool);
-    }, [selectedTool, game]);
+        if (game) {
+            game.setTool(selectedTool, selectedColor);
+        }
+    }, [selectedTool, selectedColor, game]);
 
     useEffect(() => {
 
@@ -32,41 +44,175 @@ export function Canvas({
             }
         }
 
-
     }, [canvasRef]);
 
-    return <div style={{
+    return <div className="canvas-bg" style={{
         height: "100vh",
-        overflow: "hidden"
+        overflow: "hidden",
+        position: "relative"
     }}>
         <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight}></canvas>
-        <Topbar setSelectedTool={setSelectedTool} selectedTool={selectedTool} />
+        <Toolbar
+            setSelectedTool={setSelectedTool}
+            selectedTool={selectedTool}
+            setSelectedColor={setSelectedColor}
+            selectedColor={selectedColor}
+            game={game}
+        />
     </div>
 }
 
-function Topbar({selectedTool, setSelectedTool}: {
+function Toolbar({
+    selectedTool,
+    setSelectedTool,
+    selectedColor,
+    setSelectedColor,
+    game
+}: {
     selectedTool: Tool,
-    setSelectedTool: (s: Tool) => void
+    setSelectedTool: (s: Tool) => void,
+    selectedColor: string,
+    setSelectedColor: (c: string) => void,
+    game: Game | undefined
 }) {
-    return <div style={{
-            position: "fixed",
-            top: 10,
-            left: 10
-        }}>
-            <div className="flex gap-t">
-                <IconButton 
-                    onClick={() => {
-                        setSelectedTool("pencil")
-                    }}
-                    activated={selectedTool === "pencil"}
-                    icon={<Pencil />}
-                />
-                <IconButton onClick={() => {
-                    setSelectedTool("rect")
-                }} activated={selectedTool === "rect"} icon={<RectangleHorizontalIcon />} ></IconButton>
-                <IconButton onClick={() => {
-                    setSelectedTool("circle")
-                }} activated={selectedTool === "circle"} icon={<Circle />}></IconButton>
-            </div>
+    return <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl p-3 shadow-2xl flex items-center gap-4 z-50">
+        <div className="flex gap-1 border-r border-white/20 pr-4">
+            <IconButton
+                onClick={() => setSelectedTool("pencil")}
+                activated={selectedTool === "pencil"}
+                icon={<Pencil size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("marker")}
+                activated={selectedTool === "marker"}
+                icon={<Highlighter size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("rect")}
+                activated={selectedTool === "rect"}
+                icon={<RectangleHorizontalIcon size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("circle")}
+                activated={selectedTool === "circle"}
+                icon={<Circle size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("eraser")}
+                activated={selectedTool === "eraser"}
+                icon={<Eraser size={20} />}
+            />
         </div>
+        <div className="flex gap-1 border-r border-white/20 pr-4">
+            <IconButton
+                onClick={() => game?.undo()}
+                icon={<Undo size={20} />}
+            />
+            <IconButton
+                onClick={() => game?.redo()}
+                icon={<Redo size={20} />}
+            />
+            <IconButton
+                onClick={() => game?.exportAsPNG()}
+                icon={<Download size={20} />}
+            />
+        </div>
+        <div className="flex gap-2">
+            {COLORS.map(color => (
+                <div
+                    key={color.value}
+                    onClick={() => setSelectedColor(color.value)}
+                    className={`w-6 h-6 rounded-full cursor-pointer border-2 transition-all ${selectedColor === color.value ? "border-white scale-125 shadow-lg" : "border-transparent"}`}
+                    style={{ backgroundColor: color.value }}
+                />
+            ))}
+        </div>
+    </div>
+}
+    roomId: string;
+}) {
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const [game, setGame] = useState<Game>();
+    const [selectedTool, setSelectedTool] = useState<Tool>("pencil");
+    const [selectedColor, setSelectedColor] = useState(COLORS[0].value);
+
+    useEffect(() => {
+        if (game) {
+            game.setTool(selectedTool, selectedColor);
+        }
+    }, [selectedTool, selectedColor, game]);
+
+    useEffect(() => {
+
+        if (canvasRef.current) {
+            const g = new Game(canvasRef.current, roomId, socket);
+            setGame(g);
+
+            return () => {
+                g.destroy();
+            }
+        }
+
+    }, [canvasRef]);
+
+    return <div className="canvas-bg" style={{
+        height: "100vh",
+        overflow: "hidden",
+        position: "relative"
+    }}>
+        <canvas ref={canvasRef} width={window.innerWidth} height={window.innerHeight}></canvas>
+        <Toolbar setSelectedTool={setSelectedTool} selectedTool={selectedTool} setSelectedColor={setSelectedColor} selectedColor={selectedColor} />
+    </div>
+}
+
+function Toolbar({
+    selectedTool,
+    setSelectedTool,
+    selectedColor,
+    setSelectedColor
+}: {
+    selectedTool: Tool,
+    setSelectedTool: (s: Tool) => void,
+    selectedColor: string,
+    setSelectedColor: (c: string) => void
+}) {
+    return <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-white/20 backdrop-blur-md border border-white/30 rounded-2xl p-3 shadow-2xl flex items-center gap-4 z-50">
+        <div className="flex gap-1 border-r border-white/20 pr-4">
+            <IconButton
+                onClick={() => setSelectedTool("pencil")}
+                activated={selectedTool === "pencil"}
+                icon={<Pencil size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("marker")}
+                activated={selectedTool === "marker"}
+                icon={<Highlighter size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("rect")}
+                activated={selectedTool === "rect"}
+                icon={<RectangleHorizontalIcon size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("circle")}
+                activated={selectedTool === "circle"}
+                icon={<Circle size={20} />}
+            />
+            <IconButton
+                onClick={() => setSelectedTool("eraser")}
+                activated={selectedTool === "eraser"}
+                icon={<Eraser size={20} />}
+            />
+        </div>
+        <div className="flex gap-2">
+            {COLORS.map(color => (
+                <div
+                    key={color.value}
+                    onClick={() => setSelectedColor(color.value)}
+                    className={`w-6 h-6 rounded-full cursor-pointer border-2 transition-all ${selectedColor === color.value ? "border-white scale-125 shadow-lg" : "border-transparent"}`}
+                    style={{ backgroundColor: color.value }}
+                />
+            ))}
+        </div>
+    </div>
 }

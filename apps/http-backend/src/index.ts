@@ -5,8 +5,11 @@ import { middleware } from "./middleware";
 import { CreateUserSchema, SigninSchema, CreateRoomSchema } from "@repo/common/types";
 import { prismaClient } from "@repo/db/client";
 import cors from "cors";
+import helmet from "helmet";
+import bcrypt from "bcrypt";
 
 const app = express();
+app.use(helmet());
 app.use(express.json());
 app.use(cors())
 
@@ -21,11 +24,11 @@ app.post("/signup", async (req, res) => {
         return;
     }
     try {
+        const hashedPassword = await bcrypt.hash(parsedData.data.password, 10);
         const user = await prismaClient.user.create({
             data: {
                 email: parsedData.data?.username,
-                // TODO: Hash the pw
-                password: parsedData.data.password,
+                password: hashedPassword,
                 name: parsedData.data.name
             }
         })
@@ -48,15 +51,21 @@ app.post("/signin", async (req, res) => {
         return;
     }
 
-    // TODO: Compare the hashed pws here
     const user = await prismaClient.user.findFirst({
         where: {
             email: parsedData.data.username,
-            password: parsedData.data.password
         }
     })
 
     if (!user) {
+        res.status(403).json({
+            message: "Not authorized"
+        })
+        return;
+    }
+
+    const passwordMatch = await bcrypt.compare(parsedData.data.password, user.password);
+    if (!passwordMatch) {
         res.status(403).json({
             message: "Not authorized"
         })
@@ -124,7 +133,7 @@ app.get("/chats/:roomId", async (req, res) => {
             messages: []
         })
     }
-    
+
 })
 
 app.get("/room/:slug", async (req, res) => {
